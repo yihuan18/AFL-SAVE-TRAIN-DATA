@@ -10,3 +10,4 @@
 int csocfd;
 struct sockaddr_in mysockaddr;
 u8* seed_buf;
+FILE * yihuan_fd;
