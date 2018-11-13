@@ -3165,7 +3165,21 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
   s32 my_fd;
   s32 fd;
   u8  keeping = 0, res;
-  //printf("[save_if_interesting]yihuan enter\n");
+  //yihuan add
+  u8 written = 0;
+
+  char *mutation_buf;
+  mutation_buf = malloc(queue_cur->len);
+  memset(mutation_buf,0,queue_cur->len);
+  //printf("[socket debug] queue_cur->len is %d\n",queue_cur->len);
+  int i = 0;
+  for(;i < queue_cur->len ; i++)
+  {
+    //mutation_buf[i] = seed_buf[i] & out_buf[i];
+    if(seed_buf[i] == ((u8 *)mem)[i])
+      mutation_buf[i] = '0';
+    else  mutation_buf[i] = '1';
+  }
 
   if (fault == crash_mode) {
 
@@ -3173,16 +3187,30 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
        future fuzzing, etc. */
 
     if (!(hnb = has_new_bits(virgin_bits))) {
-      if (crash_mode) total_crashes++;
-      //yihuan add write to useless file
-          /*
-          printf("[CRASH MODE NO NEW BIT]write to useless file\n");
-          my_fn = alloc_printf("%s/useless/id:%06u", seed_dir , mutation_counter);
-          my_fd = open(my_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
-          if (my_fd < 0) PFATAL("Unable to create '%s'", my_fn);
-          ck_write(my_fd, mem, len, my_fn);
-          close(my_fd);
-          */
+      if (crash_mode) 
+      {
+        //yihuan add write to useless file
+        my_fn = alloc_printf("%s/useful/id:%06u", seed_dir , mutation_counter);
+        my_fd = open(my_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
+        if (my_fd < 0) PFATAL("Unable to create '%s'", my_fn);
+        ck_write(my_fd, mutation_buf, queue_cur->len, my_fn);
+        close(my_fd);
+        ck_free(my_fn);
+        total_crashes++;
+        useful_counter += 1;
+        written = 1;
+      }
+      else
+      {
+        //yihuan add write to useless file
+        my_fn = alloc_printf("%s/useless/id:%06u", seed_dir , mutation_counter);
+        my_fd = open(my_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
+        if (my_fd < 0) PFATAL("Unable to create '%s'", my_fn);
+        ck_write(my_fd, mutation_buf, queue_cur->len, my_fn);
+        close(my_fd);
+        ck_free(my_fn);
+        written = 1;
+      }
       return 0;
     }    
 
@@ -3202,6 +3230,17 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
     if (hnb == 2) {
       queue_top->has_new_cov = 1;
       queued_with_cov++;
+      if(written == 0)
+      {
+        my_fn = alloc_printf("%s/useful/id:%06u", seed_dir , mutation_counter);
+        my_fd = open(my_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
+        if (my_fd < 0) PFATAL("Unable to create '%s'", my_fn);
+        ck_write(my_fd, mutation_buf, queue_cur->len, my_fn);
+        close(my_fd);
+        ck_free(my_fn);
+        useful_counter += 1;
+        written = 1;
+      }  
     }
 
     queue_top->exec_cksum = hash32(trace_bits, MAP_SIZE, HASH_CONST);
@@ -3234,16 +3273,22 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
 
       total_tmouts++;
 
+      //yihuan add write to useful file
+      if(written == 0)
+      {
+        my_fn = alloc_printf("%s/useful/id:%06u", seed_dir , mutation_counter);
+        my_fd = open(my_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
+        if (my_fd < 0) PFATAL("Unable to create '%s'", my_fn);
+        ck_write(my_fd, mutation_buf, queue_cur->len, my_fn);
+        close(my_fd);
+        ck_free(my_fn);
+        written = 1;
+        useful_counter += 1;
+      }
+      
+
       if (unique_hangs >= KEEP_UNIQUE_HANG) 
       {
-          //yihuan add write to useless file
-          printf("[unique_hangs >= KEEP_UNIQUE_HANG]write to useless file\n");
-          my_fn = alloc_printf("%s/useless/id:%06u", seed_dir , mutation_counter);
-          my_fd = open(my_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
-          if (my_fd < 0) PFATAL("Unable to create '%s'", my_fn);
-          ck_write(my_fd, mem, len, my_fn);
-          close(my_fd);
-          ck_free(my_fn);
           return keeping;
       }
       
@@ -3258,14 +3303,7 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
 
         if (!has_new_bits(virgin_tmout)) 
         {
-          //yihuan add write to useless file
-          printf("[!has_new_bits]write to useless file\n");
-          my_fn = alloc_printf("%s/useless/id:%06u", seed_dir , mutation_counter);
-          my_fd = open(my_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
-          if (my_fd < 0) PFATAL("Unable to create '%s'", my_fn);
-          ck_write(my_fd, mem, len, my_fn);
-          close(my_fd);
-          ck_free(my_fn);
+          
           return keeping;
         }
 
@@ -3291,14 +3329,6 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
 
         if (stop_soon || new_fault != FAULT_TMOUT) 
         {
-          //yihuan add write to useless file
-          printf("[new_fault != FAULT_TMOUT]write to useless file\n");
-          my_fn = alloc_printf("%s/useless/id:%06u", seed_dir , mutation_counter);
-          my_fd = open(my_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
-          if (my_fd < 0) PFATAL("Unable to create '%s'", my_fn);
-          ck_write(my_fd, mem, len, my_fn);
-          close(my_fd);
-          ck_free(my_fn);
           return keeping;
         }
 
@@ -3324,6 +3354,19 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
 //start case fault_crash
     case FAULT_CRASH:
 
+      //yihuan add write to useful file
+      if(written == 0)
+      {
+        my_fn = alloc_printf("%s/useful/id:%06u", seed_dir , mutation_counter);
+        my_fd = open(my_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
+        if (my_fd < 0) PFATAL("Unable to create '%s'", my_fn);
+        ck_write(my_fd, mutation_buf, queue_cur->len, my_fn);
+        close(my_fd);
+        ck_free(my_fn);
+        useful_counter += 1;
+        written = 1;
+      }
+
 keep_as_crash:
 
       /* This is handled in a manner roughly similar to timeouts,
@@ -3334,14 +3377,6 @@ keep_as_crash:
 
       if (unique_crashes >= KEEP_UNIQUE_CRASH) 
       {
-        //yihuan add write to useless file
-          printf("[new_fault != FAULT_TMOUT]write to useless file\n");
-          my_fn = alloc_printf("%s/useless/id:%06u", seed_dir , mutation_counter);
-          my_fd = open(my_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
-          if (my_fd < 0) PFATAL("Unable to create '%s'", my_fn);
-          ck_write(my_fd, mem, len, my_fn);
-          close(my_fd);
-          ck_free(my_fn);
         return keeping;
       }
 
@@ -3355,14 +3390,6 @@ keep_as_crash:
 
         if (!has_new_bits(virgin_crash)) 
         {
-          //yihuan add write to useless file
-          printf("[!has_new_bits]write to useless file\n");
-          my_fn = alloc_printf("%s/useless/id:%06u", seed_dir , mutation_counter);
-          my_fd = open(my_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
-          if (my_fd < 0) PFATAL("Unable to create '%s'", my_fn);
-          ck_write(my_fd, mem, len, my_fn);
-          close(my_fd);
-          ck_free(my_fn);
           return keeping;
         }
 
@@ -3391,23 +3418,31 @@ keep_as_crash:
 
     case FAULT_ERROR: 
       //yihuan add write to useless file
-      printf("[FAULT_ERROR]write to useless file\n");
-      my_fn = alloc_printf("%s/useless/id:%06u", seed_dir , mutation_counter);
-      my_fd = open(my_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
-      if (my_fd < 0) PFATAL("Unable to create '%s'", my_fn);
-      ck_write(my_fd, mem, len, my_fn);
-      close(my_fd);
+      //printf("[FAULT_ERROR]write to useless file\n");
+      if(written == 0)
+      {
+        my_fn = alloc_printf("%s/useless/id:%06u", seed_dir , mutation_counter);
+        my_fd = open(my_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
+        if (my_fd < 0) PFATAL("Unable to create '%s'", my_fn);
+        ck_write(my_fd, mutation_buf, queue_cur->len, my_fn);
+        close(my_fd);
+        written = 1;
+      }
       FATAL("Unable to execute target application");
-
+      break;
     default: 
     //yihuan add write to useless file
-      printf("[DEFAULT]write to useless file\n");
-      my_fn = alloc_printf("%s/useless/id:%06u", seed_dir , mutation_counter);
-      my_fd = open(my_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
-      if (my_fd < 0) PFATAL("Unable to create '%s'", my_fn);
-      ck_write(my_fd, mem, len, my_fn);
-      close(my_fd);
-      ck_free(my_fn);
+      //printf("[DEFAULT]write to useless file\n");
+      if(written == 0)
+      {
+        my_fn = alloc_printf("%s/useless/id:%06u", seed_dir , mutation_counter);
+        my_fd = open(my_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
+        if (my_fd < 0) PFATAL("Unable to create '%s'", my_fn);
+        ck_write(my_fd, mutation_buf, queue_cur->len, my_fn);
+        close(my_fd);
+        ck_free(my_fn);
+        written = 1;
+      }
       return keeping;
 
   }
@@ -3415,16 +3450,7 @@ keep_as_crash:
   /* If we're here, we apparently want to save the crash or hang
      test case, too. */
 
-  useful_counter += 1;
 
-  //yihuan add save useful cases
-  printf("[USEFUL]save useful cases\n");
-  my_fn = alloc_printf("%s/useful/id:%06u", seed_dir , mutation_counter);
-  my_fd = open(my_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
-  if (my_fd < 0) PFATAL("Unable to create '%s'", my_fn);
-  ck_write(my_fd, mem, len, my_fn);
-  ck_free(my_fn);
-  close(my_fd);
 
   fd = open(fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
   if (fd < 0) PFATAL("Unable to create '%s'", fn);
@@ -3432,7 +3458,7 @@ keep_as_crash:
   close(fd);
 
   ck_free(fn);
-
+  free(mutation_buf);
   return keeping;
 
 }
@@ -4469,7 +4495,12 @@ static void show_stats(void) {
   } else SAYF("\r");
 
   /* Hallelujah! */
-
+  
+  //yihuan add
+  printf("Total mutation number :    %d\n",mutation_counter);
+  printf("Filtered mutation number : %d\n",filtered_counter);
+  printf("Useful mutation number :   %d\b",useful_counter);
+  
   fflush(0);
 
 }
@@ -4730,6 +4761,13 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
   //yihuan add
   mutation_counter += 1;
   //printf("yihuan enter mutation_counter = %d\n",mutation_counter);
+  
+  if(mutation_counter % 100 == 0)
+  {
+    fprintf(yihuan_fd,"total mutation : %d\n", mutation_counter);
+    fprintf(yihuan_fd,"run mutation : %d\n", filtered_counter);
+    fprintf(yihuan_fd,"useful mutation : %d\n", useful_counter);
+  }
 
   if (post_handler) {
 
@@ -4738,48 +4776,48 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
 
   }
 
-  //yihuan add before running , send to ai
-  u64 start_time = get_cur_time();
-  u8 *mutation_buf;
-  mutation_buf = ck_alloc(queue_cur->len);
-  //printf("[socket debug] queue_cur->len is %d\n",queue_cur->len);
-  int i = 0;
-  for(;i < queue_cur->len ; i++)
-  {
-    mutation_buf[i] = seed_buf[i] & out_buf[i];
-  }
-  //yihuan todo send the mutation buf to ai module
-  if (-1 == send(csocfd, mutation_buf, queue_cur->len , 0))
-  {
-    printf("send failed\n");
-    return -1;
-  }
-  //printf("send suc!\n");
-  //recv from ai 
-  int ret;
-  char if_useful;
-  if (-1 == (ret = recv(csocfd, &if_useful, 1 , 0)))
-  {
-    printf("read failed!\n");
-    return -1;
-  }
+  // //yihuan add before running , send to ai
+  // u64 start_time = get_cur_time();
+  // u8 *mutation_buf;
+  // mutation_buf = ck_alloc(queue_cur->len);
+  // //printf("[socket debug] queue_cur->len is %d\n",queue_cur->len);
+  // int i = 0;
+  // for(;i < queue_cur->len ; i++)
+  // {
+  //   mutation_buf[i] = seed_buf[i] & out_buf[i];
+  // }
+  // //yihuan todo send the mutation buf to ai module
+  // if (-1 == send(csocfd, mutation_buf, queue_cur->len , 0))
+  // {
+  //   printf("send failed\n");
+  //   return -1;
+  // }
+  // //printf("send suc!\n");
+  // //recv from ai 
+  // int ret;
+  // char if_useful;
+  // if (-1 == (ret = recv(csocfd, &if_useful, 1 , 0)))
+  // {
+  //   printf("read failed!\n");
+  //   return -1;
+  // }
 
-  u64 end_time = get_cur_time();
-  //printf("Time needed from send to recv : %d\n" , end_time - start_time);
-  //printf("read suc!\n");
-  //printf("[sock_debug] is_useful = %c\n",if_useful);
-  //sleep(1);
-  //judge if need to run , if not return 0
-  if(if_useful == '0')
-  {
-    //printf("useless mutation , do not run\n");
-    goto yihuan_here;
-  }
+  // u64 end_time = get_cur_time();
+  // //printf("Time needed from send to recv : %d\n" , end_time - start_time);
+  // //printf("read suc!\n");
+  // //printf("[sock_debug] is_useful = %c\n",if_useful);
+  // //sleep(1);
+  // //judge if need to run , if not return 0
+  // if(if_useful == '0')
+  // {
+  //   //printf("useless mutation , do not run\n");
+  //   goto yihuan_here;
+  // }
 
-  //yihuan add counter
-  filtered_counter += 1; 
+  // //yihuan add counter
+  // filtered_counter += 1; 
   
-  ck_free(mutation_buf);
+  // ck_free(mutation_buf);
 
   write_to_testcase(out_buf, len);
 
@@ -5232,8 +5270,7 @@ static u8 fuzz_one(char** argv) {
     close(fd);
   }
   ck_free(tmp);
-  
-
+ 
   /* We could mmap() out_buf as MAP_PRIVATE, but we end up clobbering every
      single byte anyway, so it wouldn't give us any performance or memory usage
      benefits. */
@@ -8229,7 +8266,7 @@ int main(int argc, char** argv) {
 
   //yihuan add start socket
   createSocket();
-
+  yihuan_fd = fopen("./fuzz_status","w");
   while (1) {
 
     u8 skipped_fuzz;
@@ -8297,6 +8334,11 @@ int main(int argc, char** argv) {
   save_auto();
 
 stop_fuzzing:
+  //yihuan add
+  fprintf(yihuan_fd,"total mutation : %d\n", mutation_counter);
+  fprintf(yihuan_fd,"run mutation : %d\n", filtered_counter);
+  fprintf(yihuan_fd,"useful mutation : %d\n", useful_counter);
+  fclose(yihuan_fd);
 
   SAYF(CURSOR_SHOW cLRD "\n\n+++ Testing aborted %s +++\n" cRST,
        stop_soon == 2 ? "programmatically" : "by user");
